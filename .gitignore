@@ -1,0 +1,11 @@
+*.mat
+*.pyc
+*.bak
+data-trial/*
+*/__pycache__/*
+*/.ipynb_checkpoints/*
+*/*.pyc
+.idea/*
+*.py.swp
+/tensorflow/data-trial/*
+~                    
