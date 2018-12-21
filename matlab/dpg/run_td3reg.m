@@ -120,7 +120,7 @@ while totsteps < minsteps + stepslearn
             Q1_da = permute(sum(bsxfun(@times,bfs_q_da,omega_t),1),[2 3 1]);
             Q2_da = permute(sum(bsxfun(@times,bfs_q_da,omega2_t),1),[2 3 1]);
             Q_da = bsxfun(@times, Q1_da, i_min) + bsxfun(@times, Q2_da, ~i_min);
-            dg_theta = reshape(mean(mtimescolumn(gamma * (td_err .* bfs_sn), ...
+            dg_theta = reshape(mean(mtimescolumn(gamma *bsxfun (@times, td_err, bfs_sn), ...
                 Q_da),2),[mdp.daction,mdp.dstate])';
             
             df_theta_history(:,end+1) = df_theta(:);

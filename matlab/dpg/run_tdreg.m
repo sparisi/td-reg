@@ -105,7 +105,7 @@ while totsteps < minsteps + stepslearn
 
             df_theta = reshape(mean(mtimescolumn(bfs_s, permute(sum(bsxfun(@times,basis_q_da(s,a_pi),omega),1),[2 3 1])), 2),[mdp.daction,mdp.dstate])';
             dg_omega = bfs_s_a * td_err' / bsize;
-            dg_theta = reshape(mean(mtimescolumn(gamma * (td_err .* bfs_sn), ...
+            dg_theta = reshape(mean(mtimescolumn(gamma * bsxfun(@times, td_err, bfs_sn), ...
                 permute(sum(bsxfun(@times,basis_q_da(sn,an_pi),omega_t),1),[2 3 1])),2),[mdp.daction,mdp.dstate])';
             df_theta_history(:,end+1) = df_theta(:);
             dg_omega_history(:,end+1) = dg_omega;
