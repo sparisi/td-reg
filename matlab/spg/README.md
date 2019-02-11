@@ -5,5 +5,5 @@
 
 #### How to plot results
 * `plot_vs.m` plots the results for single trials of different algorithms. Data is loaded from root folder.
-* `make_stdplot.m` plots mean and std error of all algorithms over all trials.
+* `make_stdplot.m` plots mean and 95% confidence interval of all algorithms over all trials.
 * `make_stdplot_lambda.m` does the same, but for different values of lambda_decay for SPG TD-REG.

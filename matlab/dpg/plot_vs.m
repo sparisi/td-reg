@@ -3,6 +3,7 @@ close all
 Files = dir(fullfile('.','*.mat'));
 J_bound = -500;
 TD_bound = 1e6;
+eval_every = 1;
 
 figure, hold all, title('J')
 for f = {Files.name}
@@ -11,7 +12,7 @@ for f = {Files.name}
 end
 xlabel Steps
 ylabel 'Expected return'
-xlim([0, (length(h.J_history)-1)*h.eval_every])
+xlim([0, (length(h.J_history)-1)*eval_every])
 legend show
 
 figure, hold all, title('TD')
@@ -21,7 +22,7 @@ for f = {Files.name}
 end
 xlabel Steps
 ylabel 'Mean Squared TD Error (Estimate)'
-xlim([0, (length(h.td_history)-1)*h.eval_every])
+xlim([0, (length(h.td_history)-1)*eval_every])
 legend show
 
 figure, hold all, title('TD true')
@@ -31,7 +32,7 @@ for f = {Files.name}
 end
 xlabel Steps
 ylabel 'Mean Squared TD Error (True)'
-xlim([0, (length(h.td_true_history)-1)*h.eval_every])
+xlim([0, (length(h.td_true_history)-1)*eval_every])
 legend show
 
 autolayout

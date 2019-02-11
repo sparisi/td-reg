@@ -6,7 +6,7 @@ Command
     python3 run_multiproc.py <ALG_NAME> <N_TRIALS> <ENV_LIST>
 
 Example
-    python3 run_multiproc.py 5 ppo Pendulum-v0 Swimmer-v2
+    python3 run_multiproc.py ppo 5 Pendulum-v0 Swimmer-v2
 
 Data is still saved as usual in `data-trial`, but instead of the current date and time,
 the seed (= trial number) is used. For example, for the above run data will be saved in
