@@ -1,13 +1,13 @@
 function run_single(trial, do_retrace, reg_type)
 
+clear basis_fourier
 rng(trial)
 
 mdp = Pendulum;
 
-% tmp_policy.drawAction = @(x)mymvnrnd(zeros(mdp.daction,1), 16*eye(mdp.daction), size(x,2));
-% ds = collect_samples(mdp, 100, 100, tmp_policy);
-% B = avg_pairwise_dist([ds.s]);
-load B_single
+tmp_policy.drawAction = @(x)mymvnrnd(zeros(mdp.daction,1), 16*eye(mdp.daction), size(x,2));
+ds = collect_samples(mdp, 100, 100, tmp_policy);
+B = avg_pairwise_dist([ds.s]);
 bfs = @(varargin) basis_fourier(100, mdp.dstate, B, 0, varargin{:});
 
 A0 = zeros(mdp.daction,bfs()+1);

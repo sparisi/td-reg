@@ -1,13 +1,15 @@
 function run_double(trial, do_retrace, reg_type)
 
+clear basis_fourier
 rng(trial)
 
 mdp = DoubleLink;
 
-% tmp_policy.drawAction = @(x)mymvnrnd(zeros(mdp.daction,1), 16*eye(mdp.daction), size(x,2));
-% ds = collect_samples(mdp, 100, 100, tmp_policy);
-% B = avg_pairwise_dist([ds.s]);
-load B_double
+tmp_policy.drawAction = @(x)mymvnrnd(zeros(mdp.daction,1), 16*eye(mdp.daction), size(x,2));
+ds = collect_samples(mdp, 100, 100, tmp_policy);
+state = [ds.s];
+state = [cos(state(1:2:end,:)); sin(state(1:2:end,:)); state(2:2:end,:)];
+B = avg_pairwise_dist(state);
 bfs_base = @(varargin) basis_fourier(300, mdp.dstate+mdp.dstate/2, B, 0, varargin{:});
 bfs = @(varargin)basis_nlink(bfs_base, varargin{:});
 
@@ -15,9 +17,9 @@ A0 = zeros(mdp.daction,bfs()+1);
 Sigma0 = 200*eye(mdp.daction);
 policy = GaussianLinearChol(bfs, mdp.daction, A0, Sigma0);
 
-episodes_eval = 1000;
+episodes_eval = 1;
 episodes_learn = 6;
-steps_eval = 500;
+steps_eval = 1;
 steps_learn = 500;
 maxiter = 1000;
 

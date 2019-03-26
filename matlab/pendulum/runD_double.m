@@ -1,13 +1,15 @@
 function runD_double(trial, do_retrace, reg_type)
 
+clear basis_fourier
 rng(trial)
 
 mdp = DoubleLink;
 
-% tmp_policy.drawAction = @(x)mymvnrnd(zeros(mdp.daction,1), 16*eye(mdp.daction), size(x,2));
-% ds = collect_samples(mdp, 100, 100, tmp_policy);
-% B = avg_pairwise_dist([ds.s]);
-load B_double
+tmp_policy.drawAction = @(x)mymvnrnd(zeros(mdp.daction,1), 16*eye(mdp.daction), size(x,2));
+ds = collect_samples(mdp, 100, 100, tmp_policy);
+state = [ds.s];
+state = [cos(state(1:2:end,:)); sin(state(1:2:end,:)); state(2:2:end,:)];
+B = avg_pairwise_dist(state);
 bfs_base = @(varargin) basis_fourier(300, mdp.dstate+mdp.dstate/2, B, 0, varargin{:});
 bfs = @(varargin)basis_nlink(bfs_base, varargin{:});
 
@@ -128,8 +130,8 @@ while iter <= maxiter
     norm_g2 = norm(grad);
     norm_ng = norm(grad_nat);
     J = evaluate_policies(mdp, episodes_eval, steps_eval, policy.makeDeterministic);
-    fprintf('%d) Entropy: %.2f,   Norm (G1): %e,   Norm (G2): %e,   Norm (NG): %e,   J: %e \n', ...
-        iter, entropy, norm_g1, norm_g2, norm_ng, J);
+%     fprintf('%d) Entropy: %.2f,   Norm (G1): %e,   Norm (G2): %e,   Norm (NG): %e,   J: %e \n', ...
+%         iter, entropy, norm_g1, norm_g2, norm_ng, J);
     J_history(iter) = J;
     e_history(iter) = entropy;
     
