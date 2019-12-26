@@ -1,5 +1,5 @@
-function run_tdreg(trial, folder_save, varargin)
-% DPG with TD-regularization
+function run_dpg_reg(trial, folder_save, varargin)
+% DPG with TD-regularization.
 
 if nargin == 0, trial = 1; folder_save = []; end
 if nargin == 1, folder_save = []; end
@@ -32,6 +32,7 @@ if nargin == 1, folder_save = []; end
     lambda, ...
     lambda_decay] = common_settings(trial, varargin{:});
 
+
 totsteps = 0;
 dataidx = 1;
 J_history = [];
@@ -42,6 +43,7 @@ theta_history = [];
 df_theta_history = [];
 dg_omega_history = [];
 dg_theta_history = [];
+l2_diff_history = [];
 
 try
     J_history(end+1) = mdp.avg_return(theta,0);
@@ -74,6 +76,7 @@ while totsteps < minsteps + stepslearn
         data.bfs_s(:,dataidx) = basis_pi(state);
         data.bfs_sn(:,dataidx) = basis_pi(nextstate);
         data.bfs_s_a(:,dataidx) = basis_q(state,action);
+        state = nextstate;
 
         step = step + 1;
         dataidx = dataidx + 1;
@@ -96,29 +99,35 @@ while totsteps < minsteps + stepslearn
             a_pi = theta * bfs_s;
             an_pi = theta * bfs_sn; % No target policy for next action
             bfs_s_a = data.bfs_s_a(:,mb);
-            bfs_sn_anpi = basis_q(sn, an_pi);
+            bfs_sn_anpi = basis_q(sn,an_pi);
+            bfs_d_s_api = basis_q_da(s,a_pi);
+            bfs_d_sn_anpi = basis_q_da(sn,an_pi);
             
             q = omega' * bfs_s_a;
             q_t = omega_t' * bfs_sn_anpi;
 
             td_err = q - (r + gamma .* q_t .* ~d);
 
-            df_theta = reshape(mean(mtimescolumn(bfs_s, permute(sum(bsxfun(@times,basis_q_da(s,a_pi),omega),1),[2 3 1])), 2),[mdp.daction,mdp.dstate])';
             dg_omega = bfs_s_a * td_err' / bsize;
-            dg_theta = reshape(mean(mtimescolumn(gamma * bsxfun(@times, td_err, bfs_sn), ...
-                permute(sum(bsxfun(@times,basis_q_da(sn,an_pi),omega_t),1),[2 3 1])),2),[mdp.daction,mdp.dstate])';
-            df_theta_history(:,end+1) = df_theta(:);
-            dg_omega_history(:,end+1) = dg_omega;
-            dg_theta_history(:,end+1) = dg_theta(:);
+            df_theta = reshape(mean( ...
+                mtimescolumn(bfs_s, permute(sum(bsxfun(@times,bfs_d_s_api,omega), 1), [2 3 1])), ...
+                2), [mdp.daction,mdp.dstate])';
+            dg_theta = reshape(mean( ...
+                mtimescolumn(gamma * bsxfun(@times, td_err, bfs_sn), permute(sum(bsxfun(@times,bfs_d_sn_anpi,omega_t), 1), [2 3 1])), ...
+                2), [mdp.daction,mdp.dstate])';
+            
+%             df_theta_history(:,end+1) = df_theta(:);
+%             dg_omega_history(:,end+1) = dg_omega;
+%             dg_theta_history(:,end+1) = dg_theta(:);
             
             % By default, ADAM solves a minimization problem, that's why we change the sign
+            theta_old = theta;
             theta = reshape(optimPi.step(theta(:)', -df_theta(:)' -lambda*dg_theta(:)'), size(theta));
+            l2_diff_history(end+1) = norm(theta-theta_old);
             lambda = lambda*lambda_decay;
-%             theta = max(min(theta,zeros(size(theta))),-ones(size(theta)));
             omega = optimQ.step(omega', dg_omega')';
 
             omega_t = tau_omega * omega + (1-tau_omega) * omega_t;
-            
         end
         
         %% Evaluate policy
@@ -144,11 +153,11 @@ while totsteps < minsteps + stepslearn
             td_history(end+1) = mean(td_err.^2);
             td_true_history(end+1) = mean(td_err_true.^2);
             theta_history(:,end+1) = theta(:);
-            omega_history(:,end+1) = omega;
+%             omega_history(:,end+1) = omega;
         end
         
     end
     
 end
 
-save([folder_save 'tdreg_' num2str(trial)], 'J_history', 'td_history', 'td_true_history', 'theta_history', 'omega_history', 'df_theta_history', 'dg_omega_history', 'dg_theta_history')
+save([folder_save 'dpg_reg_' num2str(trial)], 'l2_diff_history', 'J_history', 'td_history', 'td_true_history', 'theta_history', 'omega_history', 'df_theta_history', 'dg_omega_history', 'dg_theta_history')

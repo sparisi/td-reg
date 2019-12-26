@@ -53,8 +53,14 @@ classdef LQR < MDP & LQREnv
             nstate = size(state,2);
             absorb = false(1,nstate);
             nextstate = obj.A*state + obj.B*action;
-            if obj.noisy_trans
+            if strcmp(obj.noisy_trans, 'non-uniform')
+                nextstate = nextstate + 0.05 * randn(obj.dstate, nstate) ./ min(max(abs(nextstate), 0.1), 200);
+            end
+            if strcmp(obj.noisy_trans, 'uniform')
                 nextstate = nextstate + 0.1*randn(size(state));
+%                 if all(state < 10, 1) & all(state > 0, 1)
+%                     nextstate = nextstate + 10*randn(size(state));
+%                 end
             end
             reward = -sum(bsxfun(@times, state'*obj.Q, state'), 2)' ...
                 -sum(bsxfun(@times, action'*obj.R, action'), 2)';
@@ -64,7 +70,7 @@ classdef LQR < MDP & LQREnv
     
     %% Plotting
     methods(Hidden = true)
-
+        
         function initplot(obj)
             if obj.dstate > 2, return, end
             

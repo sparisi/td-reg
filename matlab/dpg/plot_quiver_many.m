@@ -39,7 +39,7 @@ xlabel('Actor parameter 1');
 ylabel('Actor parameter 2');
 title('DPG');
 
-folder = './paperplot/';
+folder = './';
 
 name = 'dpg';
 i = 1;
@@ -77,7 +77,7 @@ ylabel('Actor parameter 2');
 title('TD-Regularized DPG');
 
 %%
-name = 'tdreg';
+name = 'dpg_reg';
 i = 1;
 for idx_trial = [1,4,6]
     load([folder(3:end) name '_' num2str(idx_trial) '.mat'])

@@ -23,19 +23,21 @@ function [gamma, ...
     optimQ, ...
     optimPi, ...
     lambda, ...
-    lambda_decay] = common_settings(trial, varargin)
+    lambda_decay, ...
+    optimPi_tdreg] = common_settings(trial, varargin)
 
 rng(trial)
 
-options = {'lambda', 'lambda_decay', 'basis_degree', 'tau_omega', 'tau_theta'};
-defaults = {0.1, 0.999, 2, 1, 0.01};
-[lambda, lambda_decay, basis_degree, tau_omega, tau_theta] = internal.stats.parseArgs(options, defaults, varargin{:});
+options = {'lambda', 'lambda_decay', 'basis_degree', 'tau_omega', 'tau_theta', 'lrate_pi', 'mdp_noise'};
+defaults = {0.1, 0.999, 3, 1, 0.01, 5e-3, 'uniform'};
+[lambda, lambda_decay, basis_degree, tau_omega, tau_theta, lrate_pi, mdp_noise] = ...
+    internal.stats.parseArgs(options, defaults, varargin{:});
 
 dim = 2; % dimensionality of the LQR
 gamma = 0.99;
 mdp = LQR(dim);
 mdp.gamma = gamma;
-mdp.noisy_trans = true;
+mdp.noisy_trans = mdp_noise;
 
 basis_pi = @(s)s;
 dim_theta = mdp.daction*mdp.dstate;
@@ -62,24 +64,17 @@ omega_t = omega; % target Q-function params
 noise_pi = 5; % exploration noise
 noise_decay = 0.95;
 
-data.s = nan(mdp.dstate, 0);
-data.sn = nan(mdp.dstate, 0);
-data.a = nan(mdp.daction, 0);
-data.r = nan(mdp.dreward, 0);
-data.q = nan(mdp.dreward, 0);
-data.done = nan(1, 0);
-data.bfs_s = nan(mdp.dstate,0);
-data.bfs_sn = nan(mdp.dstate,0);
-data.bfs_s_a = nan(dim_omega,0);
-
-maxsteps = 150;     % max steps per episode
-minsteps = 1e2;     % warmup time
+maxsteps = 5;       % max steps per episode
+minsteps = 1e3;     % warmup time
 maxdata = 1e6;      % max data stored
-stepslearn = 12000-minsteps; % steps of learning (after warmup)
+stepslearn = ...
+  20000 - minsteps; % steps of learning (after warmup)
 eval_every = 100;   % evaluate every X learning steps
 bsize = 32;         % minibatch size
 
 optimQ = ADAM(length(omega(:)));
-optimPi = ADAM(length(theta(:)));
 optimQ.alpha = 1e-2;
-optimPi.alpha = 5e-4;
+optimPi = ADAM(length(theta(:)));
+optimPi.alpha = lrate_pi;
+optimPi_tdreg = ADAM(length(theta(:)));
+optimPi_tdreg.alpha = lrate_pi;

@@ -35,6 +35,7 @@ while iter < maxiter
     grad = grad1;
     grad = grad / max(norm(grad),1);
 
+    policy_old = policy;
     policy = policy.update(policy.theta + grad*lrate);
 
     if isa(mdp,'LQREnv')
@@ -48,6 +49,8 @@ while iter < maxiter
     J_history(iter) = J;
     theta_history(:,iter) = policy.theta;
     df_dtheta_history(:,iter) = grad1;
+    H_history(iter) = policy.entropy([ds.s]);
+    KL_history(iter) = kl_mvn2(policy_old, policy, policy.basis([ds.s]));
     
     if verbose
         fprintf('%d) Entropy: %.2f \tNorm: %.2e \tJ: %.2f \n', ...
@@ -59,4 +62,4 @@ while iter < maxiter
 end
 
 %%
-save(['./' folder_save '/reinf_' num2str(trial) '.mat'], 'J_history', 'df_dtheta_history', 'theta_history')
+save(['./' folder_save '/reinf_' num2str(trial) '.mat'], 'H_history', 'KL_history', 'J_history', 'df_dtheta_history', 'theta_history')

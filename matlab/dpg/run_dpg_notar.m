@@ -42,6 +42,7 @@ theta_history = [];
 df_theta_history = [];
 dg_omega_history = [];
 dg_theta_history = [];
+l2_diff_history = [];
 
 try
     J_history(end+1) = mdp.avg_return(theta,0);
@@ -74,6 +75,7 @@ while totsteps < minsteps + stepslearn
         data.bfs_s(:,dataidx) = basis_pi(state);
         data.bfs_sn(:,dataidx) = basis_pi(nextstate);
         data.bfs_s_a(:,dataidx) = basis_q(state,action);
+        state = nextstate;
 
         step = step + 1;
         dataidx = dataidx + 1;
@@ -97,28 +99,31 @@ while totsteps < minsteps + stepslearn
             an_pi = theta * bfs_sn;
             bfs_s_a = data.bfs_s_a(:,mb);
             bfs_sn_anpi = basis_q(sn, an_pi);
+            bfs_d_s_api = basis_q_da(s,a_pi);
             
             q = omega' * bfs_s_a;
             q_t = omega_t' * bfs_sn_anpi; % Still target Q-function
             
             td_err = q - (r + gamma .* q_t .* ~d);
             
-            df_theta = reshape(mean(mtimescolumn(bfs_s, permute(sum(bsxfun(@times,basis_q_da(s,a_pi),omega),1),[2 3 1])), 2),[mdp.daction,mdp.dstate])';
             dg_omega = bfs_s_a * td_err' / bsize;
+            df_theta = reshape(mean( ...
+                mtimescolumn(bfs_s, permute(sum(bsxfun(@times,bfs_d_s_api,omega), 1), [2 3 1])), ...
+                2), [mdp.daction,mdp.dstate])';
             
             
-            df_theta_history(:,end+1) = df_theta(:);
-            dg_omega_history(:,end+1) = dg_omega;
+%             df_theta_history(:,end+1) = df_theta(:);
+%             dg_omega_history(:,end+1) = dg_omega;
 
             
             % By default, ADAM solves a minimization problem, that's why we change the sign
+            theta_old = theta;
             theta = reshape(optimPi.step(theta(:)', -df_theta(:)'), size(theta));
+            l2_diff_history(end+1) = norm(theta-theta_old);
 
-%             theta = max(min(theta,zeros(size(theta))),-ones(size(theta)));
             omega = optimQ.step(omega', dg_omega')';
 
             omega_t = tau_omega * omega + (1-tau_omega) * omega_t;
-
         end
         
         %% Evaluate policy
@@ -144,11 +149,11 @@ while totsteps < minsteps + stepslearn
             td_history(end+1) = mean(td_err.^2);
             td_true_history(end+1) = mean(td_err_true.^2);
             theta_history(:,end+1) = theta(:);
-            omega_history(:,end+1) = omega;
+%             omega_history(:,end+1) = omega;
         end
         
     end
     
 end
 
-save([folder_save 'dpg_notar_' num2str(trial)], 'J_history', 'td_history', 'td_true_history', 'theta_history', 'omega_history', 'df_theta_history', 'dg_omega_history')
+save([folder_save 'dpg_notar_' num2str(trial)], 'l2_diff_history', 'J_history', 'td_history', 'td_true_history', 'theta_history', 'omega_history', 'df_theta_history', 'dg_omega_history')

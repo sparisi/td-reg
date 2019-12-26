@@ -17,8 +17,8 @@ if nargin == 1, folder_save = []; end
     dim_omega, ...
     theta, ...
     theta_t, ...
-    omega, ...
-    omega_t, ...
+    omega1, ...
+    omega1_t, ...
     noise_pi, ...
     noise_decay, ...
     maxsteps, ...
@@ -32,10 +32,11 @@ if nargin == 1, folder_save = []; end
     lambda, ...
     lambda_decay] = common_settings(trial, varargin{:});
 
-policy_update_every = 1; % policy update delay
+policy_update_every = 2; % policy update delay
+use_min = 1; % max_pi E[min(Q1,Q2)] (SAC style) VS max_pi E[Q1] (TD3 style)
 
 % Second critic
-omega2 = (rand(size(omega))-0.5)*2;
+omega2 = (rand(size(omega1))-0.5)*2;
 omega2_t = omega2;
 
 totsteps = 0;
@@ -48,6 +49,7 @@ theta_history = [];
 df_theta_history = [];
 dg_omega_history = [];
 dg_theta_history = [];
+l2_diff_history = [];
 
 try
     J_history(end+1) = mdp.avg_return(theta,0);
@@ -56,7 +58,7 @@ catch % If the system is unstable, the avg return is -inf
     J_history(end+1) = evaluate_policies(mdp, 100, maxsteps, policy);
 end
 theta_history(:,end+1) = theta(:);
-omega_history(:,end+1) = omega;
+omega_history(:,:,end+1) = [omega1 omega2];
 
 %%
 while totsteps < minsteps + stepslearn
@@ -80,6 +82,7 @@ while totsteps < minsteps + stepslearn
         data.bfs_s(:,dataidx) = basis_pi(state);
         data.bfs_sn(:,dataidx) = basis_pi(nextstate);
         data.bfs_s_a(:,dataidx) = basis_q(state,action);
+        state = nextstate;
 
         step = step + 1;
         dataidx = dataidx + 1;
@@ -103,30 +106,43 @@ while totsteps < minsteps + stepslearn
             an_pi = theta_t * bfs_sn + min(max((rand(mdp.daction,1)-0.5)*2*2, -noise_pi/2), noise_pi/2); % Use target policy for next action and add clipped noise
             bfs_s_a = data.bfs_s_a(:,mb);
             bfs_sn_anpi = basis_q(sn, an_pi);
+            bfs_d_s_api = basis_q_da(s,a_pi);
             
-            q = omega' * bfs_s_a;
+            q1 = omega1' * bfs_s_a;
             q2 = omega2' * bfs_s_a;
-            q_t = min(omega_t' * bfs_sn_anpi, omega2_t' * bfs_sn_anpi); % Use target Q-function
+            q1_t = omega1_t' * bfs_sn_anpi;
+            q2_t = omega2_t' * bfs_sn_anpi;
+            q_t = min(q1_t, q2_t); % Use target Q-function
             
-            td_err = q - (r + gamma .* q_t .* ~d);
+            td_err1 = q1 - (r + gamma .* q_t .* ~d);
             td_err2 = q2 - (r + gamma .* q_t .* ~d);
             
-            df_theta = reshape(mean(mtimescolumn(bfs_s, permute(sum(bsxfun(@times,basis_q_da(s,a_pi),omega),1),[2 3 1])), 2),[mdp.daction,mdp.dstate])';
-            dg_omega = bfs_s_a * td_err' / bsize;
+            dg_omega1 = bfs_s_a * td_err1' / bsize;
             dg_omega2 = bfs_s_a * td_err2' / bsize;
-            
-            df_theta_history(:,end+1) = df_theta(:);
-            dg_omega_history(:,end+1) = dg_omega;
 
+            df_theta_1 = mtimescolumn(bfs_s, permute(sum(bsxfun(@times,bfs_d_s_api,omega1), 1), [2 3 1]));
+            df_theta_2 = mtimescolumn(bfs_s, permute(sum(bsxfun(@times,bfs_d_s_api,omega2), 1), [2 3 1]));
+            i_min = q1 < q2; % update max_pi = E_pi[min(Q1,Q2)]
+            if use_min
+                df_theta = reshape(mean(bsxfun(@times, df_theta_1, i_min) + bsxfun(@times, df_theta_2, ~i_min), 2), [mdp.daction,mdp.dstate])';
+            else
+                df_theta = reshape(mean(df_theta_1, 2), [mdp.daction,mdp.dstate])';
+            end
             
-            omega = optimQ.step(omega', dg_omega')';
+            
+%             df_theta_history(:,end+1) = df_theta(:);
+%             dg_omega_history(:,:,end+1) = [dg_omega1 dg_omega2];
+            
+            omega1 = optimQ.step(omega1', dg_omega1')';
             omega2 = optimQ.step(omega2', dg_omega2')';
 
             if mod(totsteps, policy_update_every) == 0
                 % By default, ADAM solves a minimization problem, that's why we change the sign
+                theta_old = theta;
                 theta = reshape(optimPi.step(theta(:)', -df_theta(:)'), size(theta));
-%                 theta = max(min(theta,zeros(size(theta))),-ones(size(theta)));
-                omega_t = tau_omega * omega + (1-tau_omega) * omega_t;
+                l2_diff_history(end+1) = norm(theta-theta_old);
+
+                omega1_t = tau_omega * omega1 + (1-tau_omega) * omega1_t;
                 omega2_t = tau_omega * omega2 + (1-tau_omega) * omega2_t;
                 theta_t = tau_theta * theta + (1-tau_theta) * theta_t;
             end
@@ -142,20 +158,23 @@ while totsteps < minsteps + stepslearn
             end
 
             an_pi = theta_t * data.bfs_sn; % Use target policy
-            q = omega' * basis_q(data.s, data.a);
-            q_t = omega_t' * basis_q(data.sn, an_pi); % Use target Q-function
-            td_err = q - (data.r + gamma .* q_t .* ~data.done);
+            q1 = omega1' * basis_q(data.s, data.a);
+            q2 = omega2' * basis_q(data.s, data.a);
+            q1_t = omega1_t' * basis_q(data.sn, an_pi); % Use target Q-function
+            q2_t = omega2_t' * basis_q(data.sn, an_pi);
+            td_err1 = q1 - (data.r + gamma .* min(q1_t, q2_t) .* ~data.done);
+            td_err2 = q2 - (data.r + gamma .* min(q1_t, q2_t) .* ~data.done);
             try
-                td_err_true = q - mdp.q_function(theta,0,data.s,data.a);
+                td_err_true = [q1; q2] - mdp.q_function(theta,0,data.s,data.a);
             catch
-                td_err_true = td_err; % If the system is unstable, the TD error is inf, so use the estimated one
+                td_err_true = [td_err1; td_err2]; % If the system is unstable, the TD error is inf, so use the estimated one
             end
             
             J_history(end+1) = J;
-            td_history(end+1) = mean(td_err.^2);
-            td_true_history(end+1) = mean(td_err_true.^2);
+            td_history(:,end+1) = mean([td_err1; td_err2].^2,2);
+            td_true_history(:,end+1) = mean(td_err_true.^2,2);
             theta_history(:,end+1) = theta(:);
-            omega_history(:,end+1) = omega;
+%             omega_history(:,:,end+1) = [omega1 omega2];
         end
         
     end
@@ -163,4 +182,4 @@ while totsteps < minsteps + stepslearn
 end
 
 if policy_update_every == 1, delay_str = 'nodelay_'; else, delay_str = []; end
-save([folder_save 'td3_' delay_str num2str(trial)], 'J_history', 'td_history', 'td_true_history', 'theta_history', 'omega_history', 'df_theta_history', 'dg_omega_history')
+save([folder_save 'td3_' delay_str num2str(trial)], 'l2_diff_history', 'J_history', 'td_history', 'td_true_history', 'theta_history', 'omega_history', 'df_theta_history', 'dg_omega_history')
